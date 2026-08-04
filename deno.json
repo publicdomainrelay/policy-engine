@@ -1,0 +1,15 @@
+{
+  "nodeModulesDir": "auto",
+  "workspace": [
+    "./lib/policies/deno-typescript-shared",
+    "./lib/policies/deno-typescript",
+    "./lib/policies/gha-lite"
+  ],
+  "imports": {
+    "@atproto/common-web": "npm:@atproto/common-web@^0.5.0",
+    "@atproto/identity": "npm:@atproto/identity@^0.5.0",
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "@std/cli": "jsr:@std/cli@^1.0.0",
+    "@std/path": "jsr:@std/path@^1.0.0"
+  }
+}

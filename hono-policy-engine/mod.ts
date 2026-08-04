@@ -18,6 +18,8 @@ import { createServe } from "@publicdomainrelay/serve";
 import { GhaLiteExecutor } from "@publicdomainrelay/policy-engine-executor-gha-lite";
 import { TypescriptExecutor } from "@publicdomainrelay/policy-engine-executor-typescript";
 import { createPolicyEngineFactory } from "@publicdomainrelay/hono-factory-policy-engine";
+import { createScopeCache } from "@publicdomainrelay/policy-engine-scope-cache";
+import { createPolicyRegistry } from "@publicdomainrelay/policy-deno-typescript";
 import type { EngineRegistry } from "@publicdomainrelay/policy-engine-abc";
 import {
   POLICY_GHA_LITE_NSID,
@@ -85,6 +87,8 @@ if (import.meta.main) {
   const { app } = createPolicyEngineFactory({
     registry,
     resolve: makeResolver(),
+    scopeCache: createScopeCache(),
+    policies: createPolicyRegistry(),
     hostname,
     log: (level, msg, meta) => {
       if (level === "error") logger.error(msg, meta);

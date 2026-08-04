@@ -8,6 +8,9 @@
     "./lib/policies/gha-lite",
     "./lib/policy-engine-executor-gha-lite",
     "./lib/policy-engine-executor-typescript",
+    "./lib/policy-engine-evaluator",
+    "./lib/policy-engine-scope-cache",
+    "./lib/policy-engine-cli-options",
     "./lib/policy-engine-server-gha-lite",
     "./lib/policy-seeder-atproto",
     "./lib/hono-factory-policy-engine",
@@ -32,6 +35,6 @@
   },
   "tasks": {
     "test": "deno test --allow-all --unstable-worker-options test/",
-    "check": "deno check lib/common/policy-common/mod.ts lib/abc/policy-engine/mod.ts lib/policy-engine-executor-gha-lite/mod.ts lib/policy-engine-executor-typescript/mod.ts lib/policy-seeder-atproto/mod.ts lib/hono-factory-policy-engine/mod.ts hono-policy-engine/mod.ts"
+    "check": "deno check lib/common/policy-common/mod.ts lib/abc/policy-engine/mod.ts lib/policy-engine-scope-cache/mod.ts lib/policy-engine-cli-options/mod.ts lib/policy-engine-executor-gha-lite/mod.ts lib/policy-engine-executor-typescript/mod.ts lib/policy-engine-evaluator/mod.ts lib/policy-seeder-atproto/mod.ts lib/hono-factory-policy-engine/mod.ts hono-policy-engine/mod.ts"
   }
 }

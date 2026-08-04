@@ -5,6 +5,9 @@
   "exports": "./mod.ts",
   "imports": {
     "@publicdomainrelay/policy-engine-abc": "jsr:@publicdomainrelay/policy-engine-abc@^0",
-    "@publicdomainrelay/policy-common": "jsr:@publicdomainrelay/policy-common@^0"
+    "@publicdomainrelay/policy-engine-evaluator": "jsr:@publicdomainrelay/policy-engine-evaluator@^0",
+    "@publicdomainrelay/policy-engine-scope-cache": "jsr:@publicdomainrelay/policy-engine-scope-cache@^0",
+    "@publicdomainrelay/policy-common": "jsr:@publicdomainrelay/policy-common@^0",
+    "@publicdomainrelay/policy-deno-typescript-shared": "jsr:@publicdomainrelay/policy-deno-typescript-shared@^0"
   }
 }

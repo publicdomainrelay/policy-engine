@@ -11,6 +11,7 @@
 
 import type { PolicySeeder } from "@publicdomainrelay/policy-engine-abc";
 import type { RecordRef, RefreshHandle } from "@publicdomainrelay/policy-common";
+import { WORKFLOWS } from "@publicdomainrelay/policies-gha-lite";
 
 /** Minimal structural atproto repo client — same shape as atproto-market's. */
 export interface AtprotoRepo {
@@ -152,4 +153,28 @@ export function ghaLitePolicyDefinition(opts: {
     }),
     matches: (existing) => existing.name === name && existing.workflow === workflow,
   };
+}
+
+/** One PolicyDefinition per canonical gha-lite workflow (lib/policies/gha-lite/workflows.ts). */
+export function ghaLitePolicyDefinitions(): PolicyDefinition[] {
+  return Object.entries(WORKFLOWS).map(([name, workflow]) =>
+    ghaLitePolicyDefinition({ name, workflow })
+  );
+}
+
+/**
+ * The builtin typescript policy record: dispatches by name at eval time via the
+ * workerManifest bundle (BUILTIN_POLICY_BUNDLE), so no canonical requester-side
+ * name is required here — the bundle looks up input.policyName in the registry.
+ */
+export function typescriptPolicyDefinitions(bundleRef: {
+  uri: string;
+  cid: string;
+}): PolicyDefinition {
+  return typescriptPolicyDefinition({
+    name: "market-builtins",
+    manifestUri: bundleRef.uri,
+    manifestCid: bundleRef.cid,
+    policies: [{ name: "only-me" }],
+  });
 }

@@ -32,6 +32,8 @@ import {
   POLICY_TYPESCRIPT_NSID,
 } from "@publicdomainrelay/policy-common";
 import type { EngineRegistry } from "@publicdomainrelay/policy-engine-abc";
+import { createScopeCache } from "@publicdomainrelay/policy-engine-scope-cache";
+import { createPolicyRegistry } from "@publicdomainrelay/policy-deno-typescript";
 
 const GHA_LITE = POLICY_GHA_LITE_NSID;
 const TYPESCRIPT = POLICY_TYPESCRIPT_NSID;
@@ -356,6 +358,70 @@ Deno.test("factory server describes the registered kinds", async () => {
   assertEquals(res.status, 200);
   const body = await res.json() as { policies: Array<{ name: string }> };
   assertEquals(body.policies.length, 2);
+});
+
+Deno.test("factory describe lists first-party policies per-policy when a registry is supplied", async () => {
+  const { app } = createPolicyEngineFactory({
+    registry: registry(),
+    resolve: async () => ({}),
+    policies: createPolicyRegistry(),
+    hostname: "localhost",
+  });
+  const res = await app.request("/xrpc/com.publicdomainrelay.temp.market.policy.describe", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  assertEquals(res.status, 200);
+  const body = await res.json() as { policies: Array<{ name: string; kind: string; perspectives?: string[] }> };
+  assert(body.policies.some((p) => p.name === "bidder-only-me" && p.kind === "trust"));
+  assert(body.policies.some((p) => p.name === "under-4-cpus" && p.kind === "work" && p.perspectives?.includes("bidder")));
+});
+
+// ── 6. scope lane ────────────────────────────────────────────────────────────
+
+Deno.test("gha-lite executor scope runs the scope-mode workflow", async () => {
+  const executor = new GhaLiteExecutor({ sandbox: { netOnly: false } });
+  const rec = ghaLiteRecord(ALLOW_WORKFLOW);
+  const result = await executor.scope({
+    policyRecord: rec,
+    scope: { perspective: "requester", selfDid: SELF, counterpartyDid: SUBJECT, args: {} },
+  });
+  assertEquals(result?.allow, true, JSON.stringify(result));
+});
+
+Deno.test("factory checkScope runs the scope lane over HTTP with a policyRef", async () => {
+  const cache = createScopeCache();
+  const { app } = createPolicyEngineFactory({
+    registry: registry(),
+    resolve: async (ref) => {
+      if (ref.uri.includes(GHA_LITE)) return ghaLiteRecord(ALLOW_WORKFLOW).value!;
+      throw new Error(`unexpected resolve ${ref.uri}`);
+    },
+    scopeCache: cache,
+    hostname: "localhost",
+  });
+  const policyRef: StrongRef = { uri: `at://did:plc:op/${GHA_LITE}/rec`, cid: "cid-gha" };
+  const res = await app.request("/xrpc/com.publicdomainrelay.temp.market.policy.checkScope", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "t", policyRef, subjectDid: SUBJECT, rootRequesterDid: REQ }),
+  });
+  assertEquals(res.status, 200);
+  const body = await res.json() as PolicyResult;
+  assertEquals(body.allow, true, JSON.stringify(body));
+});
+
+Deno.test("factory checkScope denies without a policyRef", async () => {
+  const { app } = createPolicyEngineFactory({ registry: registry(), resolve: async () => ({}), hostname: "localhost" });
+  const res = await app.request("/xrpc/com.publicdomainrelay.temp.market.policy.checkScope", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name: "t", subjectDid: SUBJECT, rootRequesterDid: REQ }),
+  });
+  assertEquals(res.status, 200);
+  const body = await res.json() as PolicyResult;
+  assertEquals(body.allow, false);
 });
 
 function assertStringIncludes(hay: string, needle: string): void {

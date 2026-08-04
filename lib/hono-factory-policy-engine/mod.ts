@@ -1,7 +1,7 @@
 /**
  * hono-factory-policy-engine — Hono surface for the policy engine.
  *
- * COMPOSITE factory covering BOTH executors (gha-lite + typescript): the caller
+ * COMPOSITE factory covering both executors (gha-lite + typescript): the caller
  * composes the executors into an EngineRegistry and passes it in. Composed, not
  * subclassed, per the org ABC-layering rule — a new executor = a sibling
  * package + one registry entry, never a subclass or a branch inside this
@@ -9,16 +9,15 @@
  * happens through the registry.
  *
  * createPolicyEngineServer builds a concrete PolicyEngineServer that dispatches
- * evaluate() through an EngineRegistry ($type -> executor), resolves policyRefs
- * with the caller's resolve(), and is honest about checkScope (a ScopeRequest
- * carries no $type, so it cannot run — it denies with a clear message).
+ * evaluate() through an EngineRegistry ($type -> executor) and runs checkScope
+ * through the shared evaluator's scope lane (record ref -> scope-mode verdict,
+ * scope-cache backed).
  *
  * createPolicyEngineFactory wraps that server in a Hono app exposing the
  * policy-engine XRPC endpoints plus a did:web identity document.
  *
- * Layer: hono-factory. Depends on abc (types) + common (types/NSIDs) + hono.
- * The executor packages are intentionally NOT imported — dispatch happens via
- * the EngineRegistry passed in by the caller.
+ * Layer: hono-factory. Depends on abc (types) + common (types/NSIDs) + hono +
+ * the evaluator (scope lane).
  */
 
 import { Hono } from "hono";
@@ -33,11 +32,15 @@ import {
   type PolicyArgs,
   type PolicyEvalCtx,
   type PolicyEvalRequest,
+  type PolicyPerspective,
   type PolicyRecord,
   type PolicyResult,
   type ScopeRequest,
   type StrongRef,
 } from "@publicdomainrelay/policy-common";
+import { createPolicyEvaluator } from "@publicdomainrelay/policy-engine-evaluator";
+import type { ScopeCache } from "@publicdomainrelay/policy-engine-scope-cache";
+import type { PolicyRegistry } from "@publicdomainrelay/policy-deno-typescript-shared";
 
 /** Options for createPolicyEngineServer — everything the server needs to run. */
 export interface PolicyEngineServerOptions {
@@ -49,6 +52,10 @@ export interface PolicyEngineServerOptions {
   resolveOperatorDid?: (did: string) => Promise<string | null>;
   /** Resolve the set of dids vouched for by `did`. Optional. */
   getVouchedDids?: (did: string) => Promise<Set<string>>;
+  /** Host scope verdict cache — checkScope serves repeat checks from cache. */
+  scopeCache?: ScopeCache;
+  /** First-party policy registry — describe() lists these per-policy. */
+  policies?: PolicyRegistry;
   /** Structured logger; defaults to a no-op. */
   log?: (level: string, msg: string, meta?: Record<string, unknown>) => void;
   /** Human description per $type for describe(); falls back to a generic line. */
@@ -68,19 +75,30 @@ function deny(msg: string): PolicyResult {
 
 /**
  * Concrete PolicyEngineServer. Dispatches evaluate() through the registry,
- * resolves policyRefs with the caller's resolve(), maps registry kinds to
- * DescribedPolicy[], and denies checkScope (no record -> no $type to dispatch).
+ * resolves policyRefs with the caller's resolve(), runs checkScope through the
+ * shared evaluator's scope lane (scope-cache backed), and describes the
+ * first-party policy registry when one is supplied.
  */
 export function createPolicyEngineServer(
   opts: PolicyEngineServerOptions,
 ): PolicyEngineServer {
-  const { registry } = opts;
+  const { registry, policies } = opts;
   const resolveOperatorDid = opts.resolveOperatorDid ??
     (async (_did: string) => null);
   const getVouchedDids = opts.getVouchedDids ??
     (async (_did: string) => new Set<string>());
   const log = opts.log ??
     ((_level: string, _msg: string, _meta?: Record<string, unknown>) => {});
+
+  const evaluator = createPolicyEvaluator({
+    registry,
+    resolve: opts.resolve,
+    resolveOperatorDid,
+    getVouchedDids,
+    scopeCache: opts.scopeCache,
+    policies,
+    log,
+  });
 
   /** Build the host-brokered PolicyEvalCtx handed to executors. */
   function buildCtx(
@@ -155,6 +173,17 @@ export function createPolicyEngineServer(
   }
 
   async function describe(): Promise<DescribedPolicy[]> {
+    if (policies) {
+      return policies.names().map((name) => {
+        const p = policies.get(name)!;
+        return {
+          name,
+          kind: p.kind,
+          description: p.description,
+          ...(p.kind === "work" ? { perspectives: p.perspectives } : {}),
+        };
+      });
+    }
     return registry.kinds().map((k) => ({
       name: k,
       kind: "trust",
@@ -163,9 +192,16 @@ export function createPolicyEngineServer(
   }
 
   async function checkScope(input: ScopeRequest): Promise<PolicyResult> {
-    // A ScopeRequest carries no policyRef/record, so there is no $type to
-    // dispatch on. Stay honest: clear deny rather than a fake allow.
-    return deny(`checkScope not supported for policy ${input.name}`);
+    if (!input.policyRef) {
+      return deny("checkScope requires a policyRef (a scope check runs the record's scope-mode lane)");
+    }
+    return await evaluator.scope({
+      ref: input.policyRef,
+      perspective: (input.perspective ?? "requester") as PolicyPerspective,
+      selfDid: input.selfDid ?? input.rootRequesterDid,
+      counterpartyDid: input.counterpartyDid ?? input.subjectDid,
+      args: input.args ?? {},
+    });
   }
 
   return { evaluate, describe, checkScope, registry };

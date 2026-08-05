@@ -177,6 +177,63 @@ Deno.test("gha-lite executor denies a record without a workflow", async () => {
   assertStringIncludes(result.violations[0].msg, "no workflow");
 });
 
+// ── 2b. gate step: allow output → workflow failure ───────────────────────────
+
+// A policy action writes allow=false to GITHUB_OUTPUT but exits 0. The gate
+// step (`test "${{ steps.policy.outputs.allow }}" = "true"`) turns that into a
+// failing step, so the workflow's terminal status reflects the deny. Without
+// the gate the executor would map the successful workflow to allow:true —
+// every policy would be a no-op. Regression for the tangled-vouch / only-me
+// "always allows" bug.
+Deno.test("gha-lite executor: gate step denies when the policy action writes allow=false", async () => {
+  const executor = new GhaLiteExecutor({ sandbox: { netOnly: false } });
+  const workflow = [
+    "name: gate-deny",
+    "on: push",
+    "jobs:",
+    "  j:",
+    "    runs-on: self-hosted",
+    "    steps:",
+    "      - run: echo \"allow=false\" >> $GITHUB_OUTPUT",
+    "        id: policy",
+    "      - run: test \"${{ steps.policy.outputs.allow }}\" = \"true\"",
+  ].join("\n");
+  const result = await executor.execute({ policyRecord: ghaLiteRecord(workflow), ctx: baseCtx() });
+  assertEquals(result.allow, false, JSON.stringify(result));
+});
+
+Deno.test("gha-lite executor: gate step allows when the policy action writes allow=true", async () => {
+  const executor = new GhaLiteExecutor({ sandbox: { netOnly: false } });
+  const workflow = [
+    "name: gate-allow",
+    "on: push",
+    "jobs:",
+    "  j:",
+    "    runs-on: self-hosted",
+    "    steps:",
+    "      - run: echo \"allow=true\" >> $GITHUB_OUTPUT",
+    "        id: policy",
+    "      - run: test \"${{ steps.policy.outputs.allow }}\" = \"true\"",
+  ].join("\n");
+  const result = await executor.execute({ policyRecord: ghaLiteRecord(workflow), ctx: baseCtx() });
+  assertEquals(result.allow, true, JSON.stringify(result));
+});
+
+// Real WORKFLOWS map: the gate step must be present on every bundled workflow
+// so a deny from any policy (tangled-vouch, only-me, mutuals, ...) fails the
+// workflow instead of being discarded.
+Deno.test("gha-lite WORKFLOWS: every workflow has the allow-gate step", async () => {
+  const { WORKFLOWS } = await import("../lib/policies/gha-lite/workflows.ts");
+  const names = Object.keys(WORKFLOWS);
+  assert(names.length >= 8, `expected the bundled workflows, got: ${names.join(", ")}`);
+  for (const [name, yaml] of Object.entries(WORKFLOWS)) {
+    const hasEcho = yaml.includes("steps.policy.outputs.allow");
+    const hasGate = yaml.includes('test "${{ steps.policy.outputs.allow }}" = "true"');
+    assert(hasEcho, `workflow ${name}: missing the policy-action step referencing steps.policy.outputs`);
+    assert(hasGate, `workflow ${name}: missing the gate step test allow = "true"`);
+  }
+});
+
 // ── 3. TypescriptExecutor ────────────────────────────────────────────────────
 
 function tsCtx(manifest: Record<string, unknown>): PolicyEvalCtx {

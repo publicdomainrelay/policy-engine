@@ -142,10 +142,10 @@ export function ghaLitePolicyDefinition(opts: {
 }): PolicyDefinition {
   const { name, workflow, permissions } = opts;
   return {
-    nsid: "computer.socialweb.temp.policy.gha-lite",
+    nsid: "computer.socialweb.temp.policy.ghalite",
     name,
     build: (now) => ({
-      $type: "computer.socialweb.temp.policy.gha-lite",
+      $type: "computer.socialweb.temp.policy.ghalite",
       name,
       workflow,
       ...(permissions ? { permissions } : {}),

@@ -9,12 +9,12 @@ of the policy engine that:
    `PolicyEngineExecutor` — so an engine kind is chosen by the referenced
    record's `$type`, never by an if-branch inside an existing implementation.
    **Right now we implement exactly two:**
-   - **In-process GHALite** — executes a `computer.socialweb.temp.policy.gha-lite`
+   - **In-process GHALite** — executes a `computer.socialweb.temp.policy.ghalite`
      record (GitHub Actions workflow YAML as admission gates).
    - **In-process Typescript via `deno-worker-sandbox`** — executes a
      `computer.socialweb.temp.policy.typescript` record, loading its
      workerManifest bundle into a `deno-worker-sandbox` worker.
-2. Adds **record lexicons** `computer.socialweb.temp.policy.gha-lite` and
+2. Adds **record lexicons** `computer.socialweb.temp.policy.ghalite` and
    `computer.socialweb.temp.policy.typescript` usable as the **referenced
    records inside the RFP record's `policy` field** — alongside the existing
    `com.publicdomainrelay.temp.market.policies.*` records.
@@ -136,7 +136,7 @@ export class TypescriptExecutor implements PolicyEngineExecutor {
 // lib/policy-engine-server-gha-lite/mod.ts (server surface dispatches via registry)
 const registry: EngineRegistry = {
   get: ($type) =>
-    $type === "computer.socialweb.temp.policy.gha-lite" ? ghaLiteExecutor
+    $type === "computer.socialweb.temp.policy.ghalite" ? ghaLiteExecutor
     : $type === "computer.socialweb.temp.policy.typescript" ? typescriptExecutor
     : undefined,
 };
@@ -150,7 +150,7 @@ way to offer alternatives".
 New namespace `computer.socialweb.temp.policy` (authored, see
 `lexicons/computer/socialweb/temp/policy/`):
 
-- **`computer.socialweb.temp.policy.gha-lite`** — a GitHub Actions workflow
+- **`computer.socialweb.temp.policy.ghalite`** — a GitHub Actions workflow
   used as an admission gate. `name` + inline `workflow` YAML (+ optional
   `permissions`). Evaluated by `GhaLiteExecutor`.
 - **`computer.socialweb.temp.policy.typescript`** — a pre-defined TypeScript

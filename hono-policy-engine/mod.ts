@@ -97,7 +97,15 @@ if (import.meta.main) {
     },
   });
 
-  const serve = createServe({ logger, tcp: { port } });
+  const serve = createServe({
+    logger,
+    tcp: {
+      port,
+      certFile: options.tlsCertFile as string | undefined,
+      keyFile: options.tlsKeyFile as string | undefined,
+    },
+    portFile: options.portFile as string | undefined,
+  });
   serve.app.route("/", app as never);
 
   function shutdown() {
